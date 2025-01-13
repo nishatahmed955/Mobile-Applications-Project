@@ -1,0 +1,416 @@
+import React, { useState, useEffect } from 'react';
+import {
+  View, 
+  Text,
+  FlatList,
+  StyleSheet,
+  Image,
+  TouchableOpacity,
+  TextInput,
+  SafeAreaView,
+  Modal,
+  StatusBar,
+  Platform,
+  Clipboard,
+} from 'react-native';
+import { WebView } from 'react-native-webview';
+import { MaterialIcons, FontAwesome } from '@expo/vector-icons';
+import { ActivityIndicator, Colors } from 'react-native-paper';
+import { LinearGradient } from 'expo-linear-gradient';
+// import { Dimensions } from 'react-native';
+
+// const { width } = Dimensions.get('window');
+
+const APP_ID = 'c3fe36cb';
+const APP_KEY = 'b90c7adb42946770e7d2de45f6c8b2c6';
+const BASE_URL = 'https://api.edamam.com/api/recipes/v2/';
+
+const SEARCH_RECIPES_URL = (query) => `${BASE_URL}?type=public&q=${encodeURIComponent(query)}&app_id=${APP_ID}&app_key=${APP_KEY}`;
+const TOP_RATED_RECIPES_URL = `${BASE_URL}?type=public&q=top-rated&app_id=${APP_ID}&app_key=${APP_KEY}`;
+
+const App = () => {
+  const [recipes, setRecipes] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [modalVisible, setModalVisible] = useState(false);
+  const [selectedRecipeUrl, setSelectedRecipeUrl] = useState(null);
+  const [favorites, setFavorites] = useState([]);
+  const [topRecipes, setTopRecipes] = useState([]);
+
+  useEffect(() => {
+    fetchTopRatedRecipes();
+  }, []);
+  // useEffect(() => {
+    // loadFavoriteRecipes();
+  // }, []);
+  // useEffect(() => {
+  //   saveFavoriteRecipes(); // Save favorite recipes whenever it changes
+  // }, [favorites]);
+
+
+  const fetchTopRatedRecipes = async () => {
+    try {
+      const response = await fetch(TOP_RATED_RECIPES_URL);
+      const data = await response.json();
+      if (data.hits) {
+        setTopRecipes(data.hits);
+      }
+    } catch (error) {
+      console.error('Error fetching top-rated recipes:', error);
+    }
+  };
+
+  const fetchRecipes = async () => {
+    try {
+      const response = await fetch(SEARCH_RECIPES_URL(searchQuery));
+      const data = await response.json();
+      if (data.hits) {
+        setRecipes(data.hits);
+      }
+    } catch (error) {
+      console.error('Error fetching recipes:', error);
+    }
+  };
+
+  const handleSearchButtonClick = () => {
+    fetchRecipes();
+  };
+
+  const handleRecipePress = (recipe) => {
+    if (recipe && recipe.url) {
+      setSelectedRecipeUrl(recipe.url);
+      setModalVisible(true);
+    } else {
+      console.error("Recipe URL is not available");
+    }
+  };
+
+  const closeModal = () => {
+    setSelectedRecipeUrl(null);
+    setModalVisible(false);
+  };
+
+  const handleCopy = async (recipe) => {
+    try {
+      await Clipboard.setString(recipe.url);
+      console.log('Recipe URL copied to clipboard:', recipe.url);
+    } catch (error) {
+      console.error('Error copying recipe URL to clipboard:', error.message);
+    }
+  };
+
+  // const handleFavorite = (recipe) => {
+  //   if (favorites.includes(recipe)) {
+  //     setFavorites(favorites.filter(fav => fav.uri !== recipe.uri));
+  //   } else {
+  //     setFavorites([...favorites, recipe]);
+  //   }
+  // };
+
+  const handleFavorite = (recipe) => {
+    if (favorites.includes(recipe)) {
+      setFavorites(favorites.filter(fav => fav.uri !== recipe.uri));
+    } else {
+      setFavorites([...favorites, recipe]);
+    }
+  };
+
+   const renderRecipeItem = ({ item }) => {
+    const isFavorite = favorites.some(fav => fav.uri === item.recipe.uri);
+
+
+    return (
+      <View style={styles.recipeContainer}>
+        <TouchableOpacity onPress={() => handleRecipePress(item.recipe)}>
+          <Image source={{ uri: item.recipe.image }} style={styles.recipeImage} />
+        </TouchableOpacity>
+        <View style={styles.recipeTextContainer}>
+          <Text style={styles.recipeTitle}>{item.recipe.label}</Text>
+        </View>
+        <View style={styles.suffixIconsContainer}>
+        <TouchableOpacity style={styles.favoriteButton} onPress={() => handleFavorite(item.recipe)}>
+            <FontAwesome name={isFavorite ? "heart" : "heart-o"} size={24} color="#ff6347" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.copyButton} onPress={() => handleCopy(item.recipe)}>
+            <MaterialIcons name="content-copy" size={24} color="#007bff" />
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
+
+  
+  const renderSearchResultItem = ({ item }) => {
+    const isFavorite = favorites.some(fav => fav.uri === item.recipe.uri);
+
+    return (
+      <View style={styles.searchResultRecipeContainer}>
+        <TouchableOpacity onPress={() => handleRecipePress(item.recipe)}>
+          <Image source={{ uri: item.recipe.image }} style={styles.searchResultRecipeImage} />
+        </TouchableOpacity>
+        <View style={styles.searchResultRecipeTextContainer}>
+          <Text style={styles.recipeTitle}>{item.recipe.label}</Text>
+          <View style={styles.searchResultSuffixIconsContainer}>
+            <TouchableOpacity style={styles.searchResultIcon} onPress={() => handleFavorite(item.recipe)}>
+            <FontAwesome name={isFavorite ? "heart" : "heart-o"} size={24} color="#ff6347" />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.searchResultIcon} onPress={() => handleCopy(item.recipe)}>
+              <MaterialIcons name="content-copy" size={24} color="#007bff" />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    );
+  };
+
+  const renderWebViewModal = () => (
+    <Modal
+      animationType="slide"
+      visible={modalVisible}
+      onRequestClose={closeModal}
+    >
+      <SafeAreaView style={styles.container}>
+        <WebView
+          source={{ uri: selectedRecipeUrl }}
+          // style={{ flex: 1 }}
+          // originWhitelist={['*']}
+          // javaScriptEnabled={true}
+          // domStorageEnabled={true}
+          // startInLoadingState={true}
+          // renderLoading={() => <ActivityIndicator size="large" color={Colors.blue500} />}
+          // onError={(error) => console.error('WebView Error:', error)}
+        />
+        <TouchableOpacity
+          style={styles.closeButton}
+          onPress={closeModal}
+        >
+          <MaterialIcons name="close" size={30} color="#fff" />
+        </TouchableOpacity>
+      </SafeAreaView>
+    </Modal>
+  );
+  // const saveFavoriteRecipes = async () => {
+  //   try {
+  //     await AsyncStorage.setItem('favorites', JSON.stringify(favorites));
+  //     console.log('Favorites saved successfully');
+  //      } catch (error) {
+  //     console.error('Error saving favorites:', error.message);
+  //   }
+  // };
+
+  // const loadFavoriteRecipes = async () => {
+  //   try {
+  //     const storedFavorites = await AsyncStorage.getItem('favorites');
+  //     if (storedFavorites !== null) {
+  //       setFavorites(JSON.parse(storedFavorites));
+  //     }
+  //   } catch (error) {
+  //     console.error('Error loading favorites:', error.message);
+  //   }
+  // };
+
+  return (
+    <SafeAreaView style={styles.safeAreaContainer}>
+      <StatusBar backgroundColor="#ff9800" barStyle="light-content" />
+      <LinearGradient colors={['#ff9800', '#ffb74d', '#ffcc80']} style={styles.header}>
+        <Text style={styles.headerText}>Recipe App</Text>
+      </LinearGradient>
+
+      <View style={styles.searchContainer}>
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search recipes..."
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+        />
+        <TouchableOpacity
+          style={styles.searchButton}
+          onPress={handleSearchButtonClick}
+        >
+          <Text style={styles.searchButtonText}>Search</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.sectionContainer}>
+        <Text style={styles.sectionHeader}>Top Rated Recipes</Text>
+        <FlatList
+          data={topRecipes}
+          renderItem={renderRecipeItem}
+          keyExtractor={(item, index) => `${item.recipe.label}-${index}`}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.recipeList}
+        />
+      </View>
+
+      <View style={[styles.sectionContainer, styles.searchResultsContainer]}>
+        <Text style={styles.sectionHeader}>Search Results</Text>
+        <FlatList
+          data={recipes}
+          renderItem={renderSearchResultItem}
+          keyExtractor={(item, index) => `${item.recipe.label}-${index}`}
+          style={{ marginBottom: 20 }}
+          contentContainerStyle={styles.recipeList}
+        />
+      </View>
+
+      {modalVisible && renderWebViewModal()}
+    </SafeAreaView>
+  );
+};
+
+const styles = StyleSheet.create({
+  safeAreaContainer: {
+    flex: 1,
+    backgroundColor: '#fff',
+    marginTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
+  },
+  container: {
+    flex: 1,
+    backgroundColor: '#fff',
+    paddingHorizontal: 20,
+  },
+  header: {
+    paddingVertical: 15,
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#ddd',
+  },
+  headerText: {
+    fontSize: 26,
+    fontWeight: 'bold',
+    color: '#fff',
+    textShadowColor: '#000',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 5,
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 20,
+    marginTop: 15,
+    marginBottom: 10,
+  },
+  searchInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#ccc',
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    borderRadius: 25,
+    backgroundColor: '#f9f9f9',
+    elevation: 1,
+  },
+  searchButton: {
+    backgroundColor: '#ff9800',
+    marginLeft: 10,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 25,
+    elevation: 2,
+  },
+  searchButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  sectionContainer: {
+    paddingHorizontal: 20,
+  },
+  searchResultsContainer: {
+    marginTop: 0,
+  },
+  sectionHeader: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 15,
+    color: '#333',
+  },
+  recipeList: {
+    paddingBottom: 20,
+  },
+  recipeContainer: {
+    width: 150,
+    marginBottom: 20,
+    borderRadius: 10,
+    overflow: 'hidden',
+    backgroundColor: '#fff',
+    elevation: 3,
+    marginRight: 15,
+  },
+  searchResultRecipeContainer: {
+    flexDirection: 'row',
+    marginBottom: 10,
+    borderRadius: 10,
+    borderColor: '#ddd',
+    borderWidth: 1,
+    backgroundColor: '#fff',
+    overflow: 'hidden',
+  },
+  searchResultRecipeImage: {
+    width: 100,
+    height: 100,
+    borderTopLeftRadius: 10,
+    borderBottomLeftRadius: 10,
+  },
+  searchResultRecipeTextContainer: {
+    flex: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    justifyContent: 'center',
+  },
+  searchResultSuffixIconsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 5,
+  },
+  recipeImage: {
+    width: '100%',
+    height: 150,
+    resizeMode: 'cover',
+  },
+  recipeTextContainer: {
+    padding: 10,
+  },
+  recipeTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 5,
+  },
+  recipeDetails: {
+    fontSize: 14,
+    color: '#666',
+  },
+  suffixIconsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 10,
+    paddingBottom: 10,
+  },
+  favoriteButton: {
+    position: 'absolute',
+    bottom: 10,
+    left: 10,
+  },
+  copyButton: {
+    position: 'absolute',
+    bottom: 10,
+    right: 10,
+  },
+  closeButton: {
+    position: 'absolute',
+    top: 20,
+    right: 20,
+    backgroundColor: '#000',
+    borderRadius: 15,
+    padding: 5,
+  },
+  searchResultIcon: {
+    marginHorizontal: 5,
+  },
+});
+
+export default App
+
